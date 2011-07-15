@@ -2,7 +2,8 @@
 """
 Created on Wed Jul  6 12:01:27 2011
 
-@author: napo
+@author: Maurizio Napolitano
+MIT License
 """
 
 from pyspatialite import dbapi2 as db
@@ -457,11 +458,11 @@ class MVP():
 mu = MVP('data/mvptn.sqlite')
 dbname = 'data/trentino_alto_adige.sqlite'
 grid = 1000
-#mu.initdb()
-#mu.creategrid(grid)
-#mu.importusers(dbname,180)
-#mu.insertptlnodes()
-#mu.createusersgrid(dbname,30,grid)
-#mu.clustergridgroup(grid)
+mu.initdb()
+mu.creategrid(grid)
+mu.importusers(dbname,180)
+mu.insertptlnodes()
+mu.createusersgrid(dbname,30,grid)
+mu.clustergridgroup(grid)
 mu.petlocations();
 print "Done"
