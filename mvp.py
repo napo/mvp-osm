@@ -14,15 +14,17 @@ import numpy as np
 import scipy.spatial.distance
 import scipy.cluster.hierarchy
 import ConfigParser
+from optparse import OptionParser, OptionGroup, OptionError
+import sys
+
 class MVP():
     outdb = None
-    tables = ("osm_nodes","osm_ways", "osm_relations")
     tables = ["osm_nodes"]
     sql_distinct = "select distinct(user) from "
     sql_count = "select count(distinct(user)) from "
     badtags = None
     epsg = None
-    fmt = '%Y-%m-%dT%H:%M:%SZ'
+    dbname = ""
 
     def __init__(self,dbout='data/out.sqlite'):
         self.outdb = dbout
@@ -163,7 +165,7 @@ class MVP():
     
     def insertptlnodes(self):
         print "search nodes"
-	indb = db.connect(dbname)  
+        indb = db.connect(self.dbname)  
         incur = indb.cursor()
         dbout = db.connect(self.outdb)
         outcur = dbout.cursor()
@@ -309,7 +311,7 @@ class MVP():
         
     def creategrid(self,res):
         print "Create grid"
-        indb = db.connect(dbname)  
+        indb = db.connect(self.dbname)  
         incur = indb.cursor()
         dbout = db.connect(self.outdb)
         outcur = dbout.cursor()
@@ -401,9 +403,6 @@ class MVP():
                     dbout.commit()
                     k +=1                
                 out.close()
-#            sql = '''UPDATE usersgrid set class=0 where class is null''';
-#            outcur.execute(sql)
-#            dbout.commit()
                     
         outcur.close();
         
@@ -454,15 +453,34 @@ class MVP():
             outcur.execute(sql)
             dbout.commit()
         outcur.close()
+
+def main():
+    usage = "usage: %prog [options]"
+    parser = OptionParser(usage)     
+    parser.add_option("-i", "--input", action="store", dest="input", help="input file")
+    parser.add_option("-o", "--output", action="store", dest="output", help="output file")
+    parser.add_option("-e", "--epsg", action="store", dest="epsg", help="metric epsg")
+    parser.add_option("-g","--grid",action="store",dest="grid",help="grid size expressed in epsg unit")
+    parser.add_option("-d", "--days", action="store", dest="days", help="users in the last N days")    
+    (options,args) = parser.parse_args()
+    if ((options.input) and  (options.output)):
+        mu = MVP(options.output)
+        dbname = options.input
+        if options.grid == None:
+            grid = 1000
+        if options.days == None:
+            days = 180
+        mu.initdb()
+        mu.creategrid(grid)
+        mu.importusers(dbname,days)
+        mu.insertptlnodes()
+        mu.createusersgrid(dbname,days,grid)
+        mu.clustergridgroup(grid)
+        mu.petlocations();
+        print "Enjoy your data on %s - i suggest to use qgis" & options.output
+    else:
+        parser.print_help()
+        sys.exit(0)
         
-mu = MVP('data/mvptn.sqlite')
-dbname = 'data/trentino_alto_adige.sqlite'
-grid = 1000
-mu.initdb()
-mu.creategrid(grid)
-mu.importusers(dbname,180)
-mu.insertptlnodes()
-mu.createusersgrid(dbname,30,grid)
-mu.clustergridgroup(grid)
-mu.petlocations();
-print "Done"
+if __name__ == "__main__":
+    main()
