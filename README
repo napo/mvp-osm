@@ -7,4 +7,22 @@ OpenStreetMap's success in the world has meant that the contributions
 the map are now so many that, at present, even without a GPS, anyone can make a contribution (or through tracing activities, or by importing data, or by adding destination information retrieved from other data sources ...).
 The map becomes increasingly rich, but often the concept of quality of data is questioned.
 MVP OSM wants to highlight areas wherethe osmers dedicate attention to detail, which is strongly required the use of a GPS or at least a deep knowledge of the area and consequent desire to see it best represented.
-The input is a file. osm, which is converted by python in a file spatialite (the gis extension for sqlite) and then processed for create clusters, which are then derive the activity of a single or multiple users on the area by create vector gis and heatmaps 
+The input is a file. osm, which is converted by python in a file spatialite (the gis extension for sqlite) and then processed for create clusters, which are then derive the activity of a single or multiple users on the area by create vector gis and heatmaps
+
+REQUIREMENTS:
+* python >2.7
+* spatialite >2.4
+* spatialite-tool (spatialite_osm_raw)
+* numpy
+
+HOW USE
+1. extract a small area with a .osm file
+ex. 
+wget http://download.gfoss.it/osm/osm/regioni/trentino_alto_adige.osm.bz2
+bunzip trentino_adige_osm.bz2
+2. convert it with spatialite_osm_raw
+ex. spatialite_osm_raw
+spatialite_osm_raw -o trentino_alto_adige_osm -d trentino_alto_adige.sqlite
+3. lunch the script
+python mvp.py -i trentino_alto_adige.osm -o trentino_alto_adige.sqlite
+

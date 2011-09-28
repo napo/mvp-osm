@@ -14,29 +14,29 @@ import numpy as np
 import scipy.spatial.distance
 import scipy.cluster.hierarchy
 import ConfigParser
-from optparse import OptionParser, OptionGroup, OptionError
-import sys
-
+from optparse import OptionParser
+import sys, os
+TEMPLATECONFIG = "example.cfg"
 class MVP():
-    outdb = None
     tables = ["osm_nodes"]
     sql_distinct = "select distinct(user) from "
     sql_count = "select count(distinct(user)) from "
-    badtags = None
-    epsg = None
-    dbname = ""
+    indb = None
+    outdb = None
+    days = None
+    grid = None
+    epsg =None
+    goodtags = None    
 
-    def __init__(self,dbout='data/out.sqlite'):
-        self.outdb = dbout
-        Config = ConfigParser.ConfigParser()
-        Config.read("conf/config.properties")
-        filename = Config.get("goodtags","file")
-        f = open(filename,'r')
-        self.goodtags = f.readlines()
-        self.epsg = Config.get("config","epsg")
+    def __init__(self,indb,outdb,days,grid,epsg,goodtags):
+        self.indb = indb
+        self.outdb = outdb
+        self.days = int(days)
+        self.grid = grid
+        self.epsg = epsg
+        self.goodtags = goodtags
         
     def initdb(self):
-        print self.outdb
         cur = db.connect(self.outdb)
         rs = cur.execute('SELECT sqlite_version(), spatialite_version()')
         for row in rs:
@@ -44,43 +44,43 @@ class MVP():
         print msg
         sql= 'SELECT InitSpatialMetadata()'
         cur.execute(sql)
-        sql = 'CREATE TABLE points ('
-        sql += 'id INTEGER PRIMARY KEY AUTOINCREMENT,'
-        sql += 'user STRING,'
-        sql += 'timestamp INTEGER);'
+        sql = '''CREATE TABLE points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user STRING,
+                timestamp INTEGER);'''
         cur.execute(sql)
 
         sql = '''SELECT AddGeometryColumn('points', 
                 'geometry', %s, 'POINT', 'XY');''' % self.epsg
         cur.execute(sql)       
 
-        sql = 'CREATE TABLE usersgrid ('
-        sql += 'id INTEGER PRIMARY KEY AUTOINCREMENT,'
-        sql += 'x FLOAT,'
-        sql += 'y FLOAT,'
-        sql += 'user STRING,'
-        sql += 'density INTEGER,'
-        sql += 'activity INTEGER,'
-        sql += 'class INTEGER default 0);'
-        cur.execute(sql)
+        sql = '''CREATE TABLE usersgrid (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                x FLOAT,
+                y FLOAT,
+                user STRING,
+                density INTEGER,
+                activity INTEGER,
+                class INTEGER default 0);'''
+	cur.execute(sql)
+        
         sql = '''SELECT AddGeometryColumn('usersgrid',
                 'geometry', %s, 'POINT', 'XY');''' % self.epsg
         cur.execute(sql)     
         
-        sql = 'CREATE TABLE users ('
-        sql += 'id INTEGER PRIMARY KEY AUTOINCREMENT,'
-        sql += 'user STRING );'
+        sql = '''CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user STRING );'''
         cur.execute(sql)        
 
-        
         # creating a POLYGON table
-        sql = 'CREATE TABLE grid ('
-        sql += 'id INTEGER PRIMARY KEY AUTOINCREMENT)'
+        sql = '''CREATE TABLE grid (
+            id INTEGER PRIMARY KEY AUTOINCREMENT)'''
+            
         cur.execute(sql)
-        sql = "SELECT AddGeometryColumn('grid', "
-        sql += "'geometry', %s, 'POLYGON', 'XY')" % self.epsg
+        sql = '''SELECT AddGeometryColumn('grid',
+             'geometry', %s, 'POLYGON', 'XY')''' % self.epsg
         cur.execute(sql)
-
 
         sql = "SELECT CreateSpatialIndex('points', 'geometry');"        
         cur.execute(sql)
@@ -90,21 +90,24 @@ class MVP():
         cur.execute(sql)
         
         sql = '''CREATE VIEW users_activity AS SELECT user,
-                    (Round(JulianDay(max(timestamp)))-(JulianDay(min(timestamp)))) as activity 
+                    (Round(JulianDay(max(timestamp)))
+                    -(JulianDay(min(timestamp)))) as activity 
                     FROM points GROUP BY user;'''
         cur.execute(sql)
         
-        sql = 'CREATE TABLE petlocations ('
-        sql += 'id INTEGER PRIMARY KEY AUTOINCREMENT,'
-        sql += 'gid INTEGER,'
-        sql += 'user STRING,'
-        sql += 'density INTEGER,'
-        sql += 'activity INTEGER,'
-        sql += 'class INTEGER default 0);'
+        sql = '''CREATE TABLE petlocations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gid INTEGER,
+            user STRING,
+            density INTEGER,
+            activity INTEGER,
+            class INTEGER default 0);'''
         cur.execute(sql)
+        
         sql = '''SELECT AddGeometryColumn('petlocations',
                 'geometry', %s, 'POLYGON', 'XY');''' % self.epsg
         cur.execute(sql) 
+
         sql = "SELECT CreateSpatialIndex('petlocations', 'geometry');"        
         cur.execute(sql)
         
@@ -113,22 +116,25 @@ class MVP():
         print "Init completed"
         
         
-    def importusers(self,dbname,delta_days=180):
-        indb = db.connect(dbname)
+    def importusers(self):
+        delta_days = self.days
+        indb = db.connect(self.indb)
         dbout = db.connect(self.outdb)
         incur = indb.cursor()
-        sixmonthago = ""
+        ago = ""
         if (delta_days == 0):
-            sixmonthago = datetime.today() - timedelta(delta_days)
+            ago = datetime.today() - timedelta(delta_days)
         else:
-            sql = "CREATE VIEW users_lastdays as SELECT user,MAX(timestamp) as tempo FROM osm_nodes GROUP BY user;"
+            sql = '''CREATE VIEW users_lastdays as SELECT user,
+            MAX(timestamp) as tempo FROM osm_nodes GROUP BY user;'''
             incur.execute(sql)
         
         s = 0
         for i in self.tables:
             
             if (delta_days > 0):
-                sql = 'select distinct(user) from users_lastdays where tempo > "%s"' % str(sixmonthago)
+                sql = '''select distinct(user) from 
+                        users_lastdays where tempo > "%s"''' % str(ago)
             else:
                 sql = "SELECT distinct(user) from osm_nodes";
                 
@@ -165,12 +171,11 @@ class MVP():
     
     def insertptlnodes(self):
         print "search nodes"
-        indb = db.connect(self.dbname)  
+        indb = db.connect(self.indb)  
         incur = indb.cursor()
         dbout = db.connect(self.outdb)
         outcur = dbout.cursor()
         for table in self.tables:  
-            #print "Search node in %s for %s" % (table, user)
             if table == 'osm_nodes':
                 w =' in ('
                 for t in self.goodtags:
@@ -227,9 +232,9 @@ class MVP():
         incur.close()
         indb.close()
         
-    def createusersgrid(self,dbname,days,res):
+    def createusersgrid(self):
         print "Create users grid"
-        indb = db.connect(dbname)  
+        indb = db.connect(self.indb)  
         incur = indb.cursor()
         sql = '''SELECT Min(ST_X(transform(osm_nodes.geometry,%s))) AS min_x, 
                         Min(ST_Y(transform(geometry,%s))) AS min_y, 
@@ -259,9 +264,9 @@ class MVP():
         maxx = rs[2]
         maxy = rs[3]
         stepminx = minx
-        stepmaxx = minx + res
+        stepmaxx = minx + self.grid
         stepminy = miny
-        stepmaxy = miny + res
+        stepmaxy = miny + self.grid
 
         while(True):  
  
@@ -273,12 +278,12 @@ class MVP():
                             (select pkid from idx_points_geometry 
                             where pkid match 
                             RTreeIntersects(%d, %d, %d, %d)) and points.user in (
-                            select user from users_activity where activity > %i);'''  % (stepminx,stepminy,stepmaxx,stepmaxy,days)                  
+                            select user from users_activity where activity > %i);'''  % (stepminx,stepminy,stepmaxx,stepmaxy,self.days)                  
 
             rs = outcur.execute(sql).fetchone()
 
-            x = stepminx + float(res/2)
-            y = stepminy + float(res/2)
+            x = stepminx + float(self.grid/2)
+            y = stepminy + float(self.grid/2)
 
             if rs != None:            
                 density = rs[0]
@@ -295,12 +300,12 @@ class MVP():
 
             if (stepmaxx <= maxx):
                 stepminx = stepmaxx
-                stepmaxx += res
+                stepmaxx += self.grid
             else:
                 stepminx = minx 
-                stepmaxx = minx + res
-                stepminy += res
-                stepmaxy += res
+                stepmaxx = minx + self.grid
+                stepminy += self.grid
+                stepmaxy += self.grid
  
                 
                 if (stepmaxy >= maxy):
@@ -311,7 +316,7 @@ class MVP():
         
     def creategrid(self,res):
         print "Create grid"
-        indb = db.connect(self.dbname)  
+        indb = db.connect(self.indb)  
         incur = indb.cursor()
         dbout = db.connect(self.outdb)
         outcur = dbout.cursor()
@@ -454,33 +459,102 @@ class MVP():
             dbout.commit()
         outcur.close()
 
+def execMVP(cmd):
+    days = None
+    epsg = None
+    outdb = None
+    indb = None
+    grid = None
+    goodtags = "conf/goodtags.txt"
+
+    if (cmd.config):
+        try:
+            parser = ConfigParser.ConfigParser()
+            parser.readfp(open(cmd.config));
+            filename = parser.get("goodtags","file")
+            f = open(filename,'r')
+            goodtags = f.readlines()
+            epsg = parser.get("config","epsg")
+            days = parser.get("config","days")
+            indb = parser.get("indb","infile")
+            outdb = parser.get("outdb","outfile")
+        except ConfigParser.NoOptionError, e:
+            print "Error %s " % e
+            sys.exit(2)    
+            
+    if (cmd.input):
+        indb = cmd.input
+    if (cmd.output):
+        outdb = cmd.output
+    if (cmd.tags):
+        try:
+            f = open(cmd.tags,'r')
+            goodtags = f.readlines()
+        except OSError, e:
+            print "Error " +  e
+            sys.exit(2)
+    if (cmd.epsg):
+        epsg = cmd.epsg
+    if (cmd.grid):
+        grid = cmd.grid
+    if (cmd.days):
+        days = cmd.days
+    
+    if days == None:
+        days = 180
+    if grid == None:
+        grid = 1000
+    if epsg == None:
+        epsg = "epsg:900913"
+        
+    mu = MVP(indb,outdb,days,grid,epsg,goodtags)
+    mu.initdb()
+    mu.creategrid(grid)
+    mu.importusers()
+    mu.insertptlnodes()
+    mu.createusersgrid()
+    mu.clustergridgroup(grid)
+    mu.petlocations();
+    print "Enjoy your data on %s - i suggest to use qgis" %  cmd.output
+        
 def main():
     usage = "usage: %prog [options]"
-    parser = OptionParser(usage)     
-    parser.add_option("-i", "--input", action="store", dest="input", help="input file")
-    parser.add_option("-o", "--output", action="store", dest="output", help="output file")
-    parser.add_option("-e", "--epsg", action="store", dest="epsg", help="metric epsg")
-    parser.add_option("-g","--grid",action="store",dest="grid",help="grid size expressed in epsg unit")
-    parser.add_option("-d", "--days", action="store", dest="days", help="users in the last N days")    
+    parser = OptionParser(usage)  
+    parser = OptionParser(usage)
+    parser.add_option("-c", "--config", action="store", dest="config", help="give a CONFIG file")
+    parser.add_option("-C", "--create", action="store_true", dest="create", help="create a SAMPLE config file - usefull to create the config file",default=False)
+    parser.add_option("-i", "--input", action="store", dest="input", help="input file *")
+    parser.add_option("-o", "--output", action="store", dest="output", help="output file *")
+    parser.add_option("-e", "--epsg", action="store", dest="epsg", help="metric epsg *")
+    parser.add_option("-g","--grid",action="store",dest="grid",help="grid size expressed in epsg unit *")
+    parser.add_option("-d", "--days", action="store", dest="days", help="users in the last N days *")    
+    parser.add_option("-t", "--tags", action="store", dest="tags", help="txt file with the list of tags to search *")    
     (options,args) = parser.parse_args()
-    if ((options.input) and  (options.output)):
-        mu = MVP(options.output)
-        dbname = options.input
-        if options.grid == None:
-            grid = 1000
-        if options.days == None:
-            days = 180
-        mu.initdb()
-        mu.creategrid(grid)
-        mu.importusers(dbname,days)
-        mu.insertptlnodes()
-        mu.createusersgrid(dbname,days,grid)
-        mu.clustergridgroup(grid)
-        mu.petlocations();
-        print "Enjoy your data on %s - i suggest to use qgis" & options.output
+    if not options.create:
+        if ((options.input) and (options.output) != None) or (options.config != None):
+            execMVP(options)
+        else:
+            parser.print_help()
+            print "* override the config file"
+            sys.exit(0)            
     else:
-        parser.print_help()
-        sys.exit(0)
+        try:        
+            f = open(os.getcwd() + os.path.sep + TEMPLATECONFIG, 'w')
+            f.write("[config]\n")
+            f.write("epsg: 900913\n")
+            f.write("grid: 1000\n")
+            f.write("days: 180\n")
+            f.write("[goodtags]\n")
+            f.write("file: conf/goodtags.txt\n")
+            f.write("[indb]\n")
+            f.write("infile:data/file.sqlite\n")
+            f.write("[outdb]\n")
+            f.write("outfile:data/mvposm.sqlite")
+            f.close()
+        except OSError, e:
+            print "Error " + e
+            sys.exit(2)
+            
         
 if __name__ == "__main__":
     main()
