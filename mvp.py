@@ -117,6 +117,7 @@ class MVP():
         
         
     def importusers(self):
+	print "importuser"
         delta_days = self.days
         indb = db.connect(self.indb)
         dbout = db.connect(self.outdb)
@@ -125,10 +126,10 @@ class MVP():
         if (delta_days == 0):
             ago = datetime.today() - timedelta(delta_days)
         else:
+	    print "Create view users_lastdays"
             sql = '''CREATE VIEW users_lastdays as SELECT user,
             MAX(timestamp) as tempo FROM osm_nodes GROUP BY user;'''
             incur.execute(sql)
-        
         s = 0
         for i in self.tables:
             
@@ -143,9 +144,12 @@ class MVP():
             if s == 0:
                 outcur = dbout.cursor()
                 for u in r:
-                    user = u[0]
-                    sql = "INSERT INTO users (user) VALUES ('%s')" % (user)
-                    outcur.execute(sql)
+		    print u
+		    user = u[0]
+                    sql = "INSERT INTO users (user) VALUES (?)"
+		    if user is not None:
+			print user 
+		    	outcur.execute(sql,[user])
                 s = s+1
                 outcur.close()
                 dbout.commit()
@@ -157,11 +161,11 @@ class MVP():
                 outcur = dbout.cursor()
                 for u in r:
                     user = u[0]
-                    sql = "Select user from users where user = '%s';" % user
-                    rsu = list(outcur.execute(sql))
+                    sql = "Select user from users where user = ?" # user
+                    rsu = list(outcur.execute(sql,user))
                     if len(rsu) == 0:
-                        sql = "INSERT INTO users (user) VALUES ('%s')" % (user)
-                        outcur.execute(sql)
+                        sql = "INSERT INTO users (user) VALUES (?)"
+                        outcur.execute(sql,[user])
                 outcur.close()
                 dbout.commit()
         incur.close()
@@ -196,8 +200,8 @@ class MVP():
                     if (r[2] != None):
                         p = "GeomFromText('POINT(%s %s)',%s)"  % (r[0],r[1],self.epsg)
                         sql = "INSERT INTO points (user, timestamp, geometry) "
-                        sql += "VALUES ('%s','%s',%s)" % (r[3],r[2],p)               
-                        outcur.execute(sql)
+                        sql += "VALUES (?,?,%s)" % p #% (r[3],r[2],p)               
+			outcur.execute(sql,(r[3],r[2]))
                 dbout.commit()
             else:
                 #FIX!!!
@@ -224,8 +228,8 @@ class MVP():
                             v = record.fetchone()
                             p = "GeomFromText('POINT(%s %s)',%s)"  % (v[0],v[1],self.epsg)
                             sql = "INSERT INTO points (user, timestamp,age, geometry) "
-                            sql += "VALUES ('%s','%s', %d,%s)" % ("", ip[1], -1,p) 
-                            outcur.execute(sql)
+                            sql += "VALUES (?,?, %d,%s)" % (-1,p) 
+                            outcur.execute(sql,("", ip[1]))
                             dbout.commit()
         outcur.close()
         dbout.close()
@@ -294,8 +298,8 @@ class MVP():
                 if user != None:
                     p = "GeomFromText('POINT(%s %s)',%s)"  % (x,y,self.epsg)
                     sql = "INSERT INTO usersgrid (x, y,user, density,activity,geometry) "
-                    sql += "VALUES (%f, %f,'%s',%i,%i,%s)" % (float(x),float(y),user,density,activity,p)
-                    outcur.execute(sql)
+                    sql += "VALUES (%f, %f,?,%i,%i,%s)" % (float(x),float(y),density,activity,p)
+                    outcur.execute(sql,[user])
                     dbout.commit()
 
             if (stepmaxx <= maxx):
