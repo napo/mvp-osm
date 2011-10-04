@@ -62,7 +62,7 @@ class MVP():
                 density INTEGER,
                 activity INTEGER,
                 class INTEGER default 0);'''
-	cur.execute(sql)
+        cur.execute(sql)
         
         sql = '''SELECT AddGeometryColumn('usersgrid',
                 'geometry', %s, 'POINT', 'XY');''' % self.epsg
@@ -117,7 +117,7 @@ class MVP():
         
         
     def importusers(self):
-	print "importuser"
+        print "importuser"
         delta_days = self.days
         indb = db.connect(self.indb)
         dbout = db.connect(self.outdb)
@@ -143,10 +143,10 @@ class MVP():
             if s == 0:
                 outcur = dbout.cursor()
                 for u in r:
-		    user = u[0]
+                    user = u[0]
                     sql = "INSERT INTO users (user) VALUES (?)"
-		    if user is not None:
-		    	outcur.execute(sql,[user])
+            if user is not None:
+                outcur.execute(sql,[user])
                 s = s+1
                 outcur.close()
                 dbout.commit()
@@ -198,8 +198,8 @@ class MVP():
                         p = "GeomFromText('POINT(%s %s)',%s)"  % (r[0],r[1],self.epsg)
                         sql = "INSERT INTO points (user, timestamp, geometry) "
                         sql += "VALUES (?,?,%s)" % p #% (r[3],r[2],p)               
-			outcur.execute(sql,(r[3],r[2]))
-                dbout.commit()
+                        outcur.execute(sql,(r[3],r[2]))
+                        dbout.commit()
             else:
                 #FIX!!!
                 for t in self.goodtags:
@@ -272,8 +272,8 @@ class MVP():
         while(True):  
  
             sql =  '''select count(id),
-			    (Round(JulianDay(max(timestamp))) - 
-			    Round(JulianDay(min(timestamp)))) as activity,
+                (Round(JulianDay(max(timestamp))) - 
+                Round(JulianDay(min(timestamp)))) as activity,
                             user 
                             from points where points.ROWID in
                             (select pkid from idx_points_geometry 
@@ -453,7 +453,7 @@ class MVP():
             user = r[3]
             activity = r[4]
             density = r[5]
-            print r[6]
+            #print r[6]
             sql = '''INSERT INTO petlocations (gid, geometry, class, user,activity,density)
                      VALUES (%s,GeomFromText('%s',%s),%s,'%s',%s,%s)''' % (gid, geometry, self.epsg,clas, user,activity,density)
             outcur.execute(sql)
