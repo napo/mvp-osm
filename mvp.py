@@ -126,7 +126,6 @@ class MVP():
         if (delta_days == 0):
             ago = datetime.today() - timedelta(delta_days)
         else:
-	    print "Create view users_lastdays"
             sql = '''CREATE VIEW users_lastdays as SELECT user,
             MAX(timestamp) as tempo FROM osm_nodes GROUP BY user;'''
             incur.execute(sql)
@@ -144,11 +143,9 @@ class MVP():
             if s == 0:
                 outcur = dbout.cursor()
                 for u in r:
-		    print u
 		    user = u[0]
                     sql = "INSERT INTO users (user) VALUES (?)"
 		    if user is not None:
-			print user 
 		    	outcur.execute(sql,[user])
                 s = s+1
                 outcur.close()
