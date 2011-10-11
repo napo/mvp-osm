@@ -454,9 +454,11 @@ class MVP():
             activity = r[4]
             density = r[5]
             #print r[6]
+            #sql = '''INSERT INTO petlocations (gid, geometry, class, user,activity,density)
+            #         VALUES (%s,GeomFromText('%s',%s),%s,'%s',%s,%s)''' % (gid, geometry, self.epsg,clas, user,activity,density)
             sql = '''INSERT INTO petlocations (gid, geometry, class, user,activity,density)
-                     VALUES (%s,GeomFromText('%s',%s),%s,'%s',%s,%s)''' % (gid, geometry, self.epsg,clas, user,activity,density)
-            outcur.execute(sql)
+                     VALUES (?,GeomFromText(?,?),?,?,?,?)''' #% (gid, geometry, self.epsg,clas, user,activity,density)
+            outcur.execute(sql,(gid, geometry, self.epsg,clas, user,activity,density))
             dbout.commit()
         outcur.close()
 
