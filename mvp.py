@@ -424,7 +424,8 @@ class MVP():
         dbout = db.connect(self.outdb)
         outcur = dbout.cursor() 
         sql = "SELECT user FROM users"
-        users = list(outcur.execute(sql))
+       	sql = "select distinct(user) from usersgrid;" 
+	users = list(outcur.execute(sql))
         outcur.close()
         return users
 
